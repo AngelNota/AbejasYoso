@@ -10,6 +10,10 @@ namespace AbejasYoso
     {
         static void Main(string[] args)
         {
+            Hilo h = new Hilo();
+            h.inicializa();
+
+            Console.ReadKey();
         }
     }
 }
