@@ -12,65 +12,59 @@ namespace AbejasYoso
         private int tarro, capTarro;
         private int numVecesComeOso;
         private readonly Thread[] abejas;
-        public int contHilosTerminados = 0;
 
         private bool puedeComer = false;
+        private bool continuarProduccion = true; // Nueva bandera para controlar la producción de las abejas
         private readonly object lockObject = new object();
 
         public Hilo()
         {
-            abejas = new Thread[10];
+            abejas = new Thread[10];  
         }
 
         public void inicializa()
         {
-            for (int i = 0; i < abejas.Length; i++)
-            {
-                int index = i; // To avoid closure issue
-                abejas[i] = new Thread(() => Abejas(index));
-            }
-
-            Thread osoThread = new Thread(Oso);
 
             Random r = new Random();
+            for (int i = 0; i < abejas.Length; i++)
+            {
+                int index = i+1; // Para evitar el problema de cierre
+                int randomValue = r.Next(1, 6);
+                abejas[i] = new Thread(() => Abejas(index,randomValue));
+            }
+            Thread osoThread = new Thread(Oso);
+
             tarro = 0;
             capTarro = 25;
             numVecesComeOso = 0;
 
+            osoThread.Start();
             foreach (var t in abejas)
             {
                 t.Start();
             }
-
-            osoThread.Start();
         }
 
-        public void Abejas(int index)
-        {
-            while (numVecesComeOso < 3)
+        public void Abejas(int index, int random)
+        { 
+
+            while (continuarProduccion) // Utilizamos esta bandera para controlar la producción
             {
-                int cantidad = new Random().Next(2, 6);
                 lock (lockObject)
                 {
-                    tarro += cantidad;
-                    Console.WriteLine($"Abeja {index} produce: {cantidad}");
+                    if (!continuarProduccion) // Salir del bucle si se indica que la producción debe detenerse
+                        break;
+
+                    tarro += random;
+                    Console.WriteLine($"Abeja {index} produce: {random}");
                     if (tarro >= capTarro)
                     {
-                        Console.WriteLine($"Tarro lleno: {tarro}");
-                        puedeComer = true;
-
-                        // Notificar al oso que el tarro está lleno
+                       
                         Monitor.Pulse(lockObject);
-
-                        // Esperar a que el oso termine de comer
-                        while (puedeComer)
-                        {
-                            Monitor.Wait(lockObject);
-                        }
+                        Monitor.Wait(lockObject);
                     }
                 }
             }
-            Interlocked.Increment(ref contHilosTerminados);
         }
 
         public void Oso()
@@ -79,24 +73,33 @@ namespace AbejasYoso
             {
                 lock (lockObject)
                 {
-                    // Esperar a que el tarro esté lleno
-                    while (!puedeComer)
-                    {
+                    while (tarro < capTarro) // Esperar hasta que el tarro esté lleno
                         Monitor.Wait(lockObject);
-                    }
-
-                    // El oso come cuando el tarro está lleno
-                    Console.WriteLine("Oso se despierta y se come la miel");
-                    tarro = 0;
-                    Console.WriteLine("Oso se duerme");
-                    numVecesComeOso++;
-                    puedeComer = false;
-
-                    // Notificar a las abejas que el oso ha comido
-                    Monitor.Pulse(lockObject);
+                    Console.WriteLine($"Tarro lleno: {tarro}");
+                    
+                        Console.WriteLine("Oso se despierta y se come la miel");
+                        tarro = 0;
+                        Console.WriteLine("Oso se duerme");
+                        numVecesComeOso++;
+                        if (numVecesComeOso < 3)
+                            Monitor.Pulse(lockObject);
+                        else // Si el oso ha comido tres veces, indicamos que la producción de las abejas debe detenerse
+                            continuarProduccion = false;
+                    
                 }
             }
-            Interlocked.Increment(ref contHilosTerminados);
+            /*
+            // Cuando el oso haya comido tres veces, indicamos a las abejas que dejen de producir
+            lock (lockObject)
+            {
+                continuarProduccion = false;
+            }
+
+            // Esperar a que todas las abejas terminen
+            foreach (var t in abejas)
+            {
+                t.Join();
+            }*/
         }
     }
 }
