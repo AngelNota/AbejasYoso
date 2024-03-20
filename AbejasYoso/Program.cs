@@ -1,4 +1,5 @@
-﻿using System;
+﻿using parcial2;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,7 +12,8 @@ namespace AbejasYoso
         static void Main(string[] args)
         {
             Hilo h = new Hilo();
-            h.inicializa();
+
+            h.IniciaHilo();
 
             Console.ReadKey();
         }

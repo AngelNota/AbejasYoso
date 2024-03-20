@@ -4,86 +4,82 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace AbejasYoso
+namespace parcial2
 {
     internal class Hilo
     {
-        private int tarro, capTarro;
-        private int numVecesComeOso;
-        private readonly Thread[] abejas;
-        private SemaphoreSlim semaforo; // Semáforo para controlar el acceso a la función Abejas
-        private SemaphoreSlim semaforoOso; // Semáforo para controlar el acceso a la función Oso
-        private bool continuarProduccion = true; // Nueva bandera para controlar la producción de las abejas
-
+        private int tarro, capTarro, numVecesComeOso;
+        private int[] abejas;
+        private bool puedeComer = false;
+        public int contHilosTerminados = 0;
         public Hilo()
         {
-            abejas = new Thread[10];
-            semaforo = new SemaphoreSlim(1, 1); // Inicializa el semáforo con un límite de 1
-            semaforoOso = new SemaphoreSlim(0, 1); // Inicializa el semáforo del oso con un límite de 1
+
         }
 
-        public void inicializa()
+        public void IniciaHilo()
         {
+            Thread[] t = new Thread[10];
+            Thread t1 = new Thread(Oso);
+
             Random r = new Random();
+            abejas = new int[10];
             for (int i = 0; i < abejas.Length; i++)
-            {
-                int index = i + 1;
-                int randomValue = r.Next(1, 6);
-                abejas[i] = new Thread(() => Abejas(index, randomValue));
-            }
-            Thread osoThread = new Thread(Oso);
+                abejas[i] = r.Next(1, 6);
 
             tarro = 0;
             capTarro = 25;
-            numVecesComeOso = 0;
 
-            osoThread.Start();
-            foreach (var t in abejas)
+            numVecesComeOso = 0;
+            t1.Start();
+            for (int i = 0; i < t.Length; i++)
             {
-                t.Start();
+                t[i] = new Thread(Abejas);
+                t[i].Start();
+                t[i].Join();
             }
         }
 
-        public async void Abejas(int index, int random)
+        public void Abejas()
         {
-            while (continuarProduccion) // Utilizamos esta bandera para controlar la producción
+            int i = 0;
+            while (numVecesComeOso < 3)
             {
-                await semaforo.WaitAsync(); // Espera hasta que el semáforo esté disponible
+                tarro += abejas[i];
+                Console.WriteLine("Abeja: {0} produce: {1}", i, abejas[i]);
 
-                if (!continuarProduccion) // Salir del bucle si se indica que la producción debe detenerse
-                {
-                    semaforo.Release(); // Libera el semáforo antes de salir
-                    break;
-                }
-
-                tarro += random;
-                Console.WriteLine($"Abeja {index} produce: {random}");
                 if (tarro >= capTarro)
                 {
-                    semaforoOso.Release(); // Despierta al oso
-                    await semaforoOso.WaitAsync(); // Espera a que el oso termine de comer
+                    Console.WriteLine("Tarro lleno: {0}", tarro);
+                    puedeComer = true;
+                    while (puedeComer) ;
                 }
 
-                semaforo.Release(); // Libera el semáforo para que la siguiente abeja pueda producir
-            }
-        }
 
+                i++;
+                if (i == abejas.Length)
+                    i = 0;
+
+            }
+            contHilosTerminados++;
+        }
         public void Oso()
         {
             while (numVecesComeOso < 3)
             {
-                semaforoOso.Wait(); // Espera hasta que el tarro esté lleno
-                Console.WriteLine($"Tarro lleno: {tarro}");
-
-                Console.WriteLine("Oso se despierta y se come la miel");
-                tarro = 0;
-                Console.WriteLine("Oso se duerme");
-                numVecesComeOso++;
-                if (numVecesComeOso < 3)
-                    semaforoOso.Release(); // Permite que las abejas continúen produciendo
-                else // Si el oso ha comido tres veces, indicamos que la producción de las abejas debe detenerse
-                    continuarProduccion = false;
+                if (puedeComer)
+                {
+                    Console.WriteLine("Oso se despierta a comer.");
+                    tarro = 0;
+                    Console.WriteLine("Oso comio.");
+                    Console.WriteLine("Oso se duerme.");
+                    numVecesComeOso++;
+                    puedeComer = false;
+                }
             }
+
+            contHilosTerminados++;
         }
+
     }
 }
