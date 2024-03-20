@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace AbejasYoso
 {
@@ -12,25 +11,25 @@ namespace AbejasYoso
         private int tarro, capTarro;
         private int numVecesComeOso;
         private readonly Thread[] abejas;
-
-        private bool puedeComer = false;
+        private SemaphoreSlim semaforo; // Semáforo para controlar el acceso a la función Abejas
+        private SemaphoreSlim semaforoOso; // Semáforo para controlar el acceso a la función Oso
         private bool continuarProduccion = true; // Nueva bandera para controlar la producción de las abejas
-        private readonly object lockObject = new object();
 
         public Hilo()
         {
-            abejas = new Thread[10];  
+            abejas = new Thread[10];
+            semaforo = new SemaphoreSlim(1, 1); // Inicializa el semáforo con un límite de 1
+            semaforoOso = new SemaphoreSlim(0, 1); // Inicializa el semáforo del oso con un límite de 1
         }
 
         public void inicializa()
         {
-
             Random r = new Random();
             for (int i = 0; i < abejas.Length; i++)
             {
-                int index = i+1; // Para evitar el problema de cierre
+                int index = i + 1;
                 int randomValue = r.Next(1, 6);
-                abejas[i] = new Thread(() => Abejas(index,randomValue));
+                abejas[i] = new Thread(() => Abejas(index, randomValue));
             }
             Thread osoThread = new Thread(Oso);
 
@@ -45,25 +44,27 @@ namespace AbejasYoso
             }
         }
 
-        public void Abejas(int index, int random)
-        { 
-
+        public async void Abejas(int index, int random)
+        {
             while (continuarProduccion) // Utilizamos esta bandera para controlar la producción
             {
-                lock (lockObject)
-                {
-                    if (!continuarProduccion) // Salir del bucle si se indica que la producción debe detenerse
-                        break;
+                await semaforo.WaitAsync(); // Espera hasta que el semáforo esté disponible
 
-                    tarro += random;
-                    Console.WriteLine($"Abeja {index} produce: {random}");
-                    if (tarro >= capTarro)
-                    {
-                       
-                        Monitor.Pulse(lockObject);
-                        Monitor.Wait(lockObject);
-                    }
+                if (!continuarProduccion) // Salir del bucle si se indica que la producción debe detenerse
+                {
+                    semaforo.Release(); // Libera el semáforo antes de salir
+                    break;
                 }
+
+                tarro += random;
+                Console.WriteLine($"Abeja {index} produce: {random}");
+                if (tarro >= capTarro)
+                {
+                    semaforoOso.Release(); // Despierta al oso
+                    await semaforoOso.WaitAsync(); // Espera a que el oso termine de comer
+                }
+
+                semaforo.Release(); // Libera el semáforo para que la siguiente abeja pueda producir
             }
         }
 
@@ -71,35 +72,18 @@ namespace AbejasYoso
         {
             while (numVecesComeOso < 3)
             {
-                lock (lockObject)
-                {
-                    while (tarro < capTarro) // Esperar hasta que el tarro esté lleno
-                        Monitor.Wait(lockObject);
-                    Console.WriteLine($"Tarro lleno: {tarro}");
-                    
-                        Console.WriteLine("Oso se despierta y se come la miel");
-                        tarro = 0;
-                        Console.WriteLine("Oso se duerme");
-                        numVecesComeOso++;
-                        if (numVecesComeOso < 3)
-                            Monitor.Pulse(lockObject);
-                        else // Si el oso ha comido tres veces, indicamos que la producción de las abejas debe detenerse
-                            continuarProduccion = false;
-                    
-                }
-            }
-            /*
-            // Cuando el oso haya comido tres veces, indicamos a las abejas que dejen de producir
-            lock (lockObject)
-            {
-                continuarProduccion = false;
-            }
+                semaforoOso.Wait(); // Espera hasta que el tarro esté lleno
+                Console.WriteLine($"Tarro lleno: {tarro}");
 
-            // Esperar a que todas las abejas terminen
-            foreach (var t in abejas)
-            {
-                t.Join();
-            }*/
+                Console.WriteLine("Oso se despierta y se come la miel");
+                tarro = 0;
+                Console.WriteLine("Oso se duerme");
+                numVecesComeOso++;
+                if (numVecesComeOso < 3)
+                    semaforoOso.Release(); // Permite que las abejas continúen produciendo
+                else // Si el oso ha comido tres veces, indicamos que la producción de las abejas debe detenerse
+                    continuarProduccion = false;
+            }
         }
     }
 }
