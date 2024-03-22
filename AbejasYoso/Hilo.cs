@@ -10,8 +10,9 @@ namespace parcial2
     {
         private int tarro, capTarro, numVecesComeOso;
         private int[] abejas;
-        private bool puedeComer = false;
-        public int contHilosTerminados = 0;
+        private Semaphore abejasSemaphore;
+        private object osoLock = new object();
+
         public Hilo()
         {
 
@@ -19,7 +20,6 @@ namespace parcial2
 
         public void IniciaHilo()
         {
-            Thread[] t = new Thread[10];
             Thread t1 = new Thread(Oso);
 
             Random r = new Random();
@@ -29,56 +29,59 @@ namespace parcial2
 
             tarro = 0;
             capTarro = 25;
-
             numVecesComeOso = 0;
+
+            abejasSemaphore = new Semaphore(0, 10);
+
             t1.Start();
-            for (int i = 0; i < t.Length; i++)
+            for (int i = 0; i < 10; i++)
             {
-                t[i] = new Thread(Abejas);
-                t[i].Start();
-                t[i].Join();
+                int index = i; // To avoid capturing the loop variable
+                Thread t = new Thread(() => Abejas(index));
+                t.Start();
             }
+
         }
 
-        public void Abejas()
+        public void Abejas(int index)
         {
-            int i = 0;
             while (numVecesComeOso < 3)
             {
-                tarro += abejas[i];
-                Console.WriteLine("Abeja: {0} produce: {1}", i, abejas[i]);
-
-                if (tarro >= capTarro)
+                int cantidad = 0;
+                lock (abejas)
                 {
-                    Console.WriteLine("Tarro lleno: {0}", tarro);
-                    puedeComer = true;
-                    while (puedeComer) ;
+                    if (index < abejas.Length)
+                    {
+                        cantidad = abejas[index];
+                        Console.WriteLine("Abeja {0}: produce {1}", index, cantidad);
+                        tarro += cantidad;
+                        if (tarro >= capTarro)
+                        {
+                            abejasSemaphore.Release();
+                        }
+                    }
                 }
 
-
-                i++;
-                if (i == abejas.Length)
-                    i = 0;
-
+                Thread.Sleep(500);
             }
-            contHilosTerminados++;
         }
+
         public void Oso()
         {
             while (numVecesComeOso < 3)
             {
-                if (puedeComer)
+                abejasSemaphore.WaitOne(); // Wait for the tarro to be full
+
+                lock (osoLock)
                 {
+                    Console.WriteLine("Tarro lleno: " + tarro);
                     Console.WriteLine("Oso se despierta a comer.");
                     tarro = 0;
-                    Console.WriteLine("Oso comio.");
+                    Console.WriteLine("Oso comió.");
                     Console.WriteLine("Oso se duerme.");
                     numVecesComeOso++;
-                    puedeComer = false;
                 }
             }
-
-            contHilosTerminados++;
         }
 
     }
