@@ -12,6 +12,7 @@ namespace parcial2
         private int[] abejas;
         private Semaphore abejasSemaphore;
         private object osoLock = new object();
+        private int abejaActual = 0; // Variable global para controlar qué abeja debe producir miel
 
         public Hilo()
         {
@@ -36,9 +37,11 @@ namespace parcial2
             t1.Start();
             for (int i = 0; i < 10; i++)
             {
-                int index = i; // To avoid capturing the loop variable
+                int index = i;
                 Thread t = new Thread(() => Abejas(index));
+                
                 t.Start();
+                
             }
 
         }
@@ -47,22 +50,28 @@ namespace parcial2
         {
             while (numVecesComeOso < 3)
             {
-                int cantidad = 0;
-                lock (abejas)
+                if(numVecesComeOso < 3)
+                if (index == abejaActual)
                 {
-                    if (index < abejas.Length)
+                    int cantidad = 0;
+                    lock (abejas)
                     {
-                        cantidad = abejas[index];
-                        Console.WriteLine("Abeja {0}: produce {1}", index, cantidad);
-                        tarro += cantidad;
-                        if (tarro >= capTarro)
+                        if (index < abejas.Length)
                         {
-                            abejasSemaphore.Release();
+                            cantidad = abejas[index];
+                            Console.WriteLine("Abeja {0}: produce {1}", index, cantidad);
+                            tarro += cantidad;
+                            if (tarro >= capTarro)
+                            {
+                                abejasSemaphore.Release();
+                            }
                         }
                     }
+
+                    Thread.Sleep(500);
+                    abejaActual = (abejaActual + 1) % abejas.Length; // Pasar a la siguiente abeja
                 }
 
-                Thread.Sleep(500);
             }
         }
 
@@ -70,7 +79,7 @@ namespace parcial2
         {
             while (numVecesComeOso < 3)
             {
-                abejasSemaphore.WaitOne(); // Wait for the tarro to be full
+                abejasSemaphore.WaitOne();
 
                 lock (osoLock)
                 {
